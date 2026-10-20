@@ -1,0 +1,570 @@
+openapi: 3.1.0
+info:
+  title: Stubline Ticketing API
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit
+  version: 1.1.0
+  description: Public event inventory and ordering API.
+security: []
+servers:
+  - url: https://localhost:8080
+paths:
+  /health:
+    head:
+      operationId: headHealthAlias
+      summary: Process liveness headers
+      responses:
+        '200':
+          description: Process is live; no response body.
+    get:
+      operationId: healthAlias
+      summary: Process liveness alias
+      responses:
+        '200':
+          $ref: '#/components/responses/Healthy'
+        '400':
+          description: Malformed request
+  /health/live:
+    get:
+      operationId: live
+      summary: Process can serve requests
+      responses:
+        '200':
+          $ref: '#/components/responses/Healthy'
+        '400':
+          description: Malformed request
+  /health/ready:
+    get:
+      operationId: ready
+      summary: Local dependencies are reachable
+      responses:
+        '200':
+          $ref: '#/components/responses/Healthy'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '400':
+          description: Malformed request
+  /events:
+    get:
+      operationId: listEvents
+      summary: List events in the development catalog
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Opaque cursor returned by the preceding page.
+      responses:
+        '200':
+          description: Events and next page cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /events/{eventId}/seats:
+    get:
+      operationId: listEventSeats
+      summary: List seats at an event
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: concert-1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 1
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Opaque cursor returned by the preceding page.
+      responses:
+        '200':
+          description: Seats and their current availability
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeatPage'
+              example:
+                seats:
+                  - id: A1
+                    eventId: concert-1
+                    available: true
+                next: Y29uY2VydC0xOkEx
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '431':
+          $ref: '#/components/responses/HeadersTooLarge'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/InventoryTimeout'
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      security:
+        - buyerBearer: []
+      summary: Retrieve an order belonging to the authenticated buyer
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The buyer's order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orders/{orderId}/ticket:
+    get:
+      operationId: getTicketDownloadUrl
+      security:
+        - buyerBearer: []
+      summary: Get a five-minute signed ticket URL
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: order-1
+      responses:
+        '200':
+          description: Ticket download URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+              example:
+                url: https://tickets.example.net/tickets/order-1.pdf
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /payments:
+    post:
+      operationId: createPayment
+      security:
+        - buyerBearer: []
+      summary: Charge a payment with a 24-hour idempotency key
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 255
+          example: cart-1-attempt-1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, amountCents]
+              properties:
+                orderId:
+                  type: string
+                amountCents:
+                  type: integer
+                  minimum: 1
+            example:
+              orderId: order-1
+              amountCents: 1500
+      responses:
+        '201':
+          description: Payment accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chargeId, orderId, amountCents]
+                properties:
+                  chargeId: {type: string}
+                  orderId: {type: string}
+                  amountCents: {type: integer}
+              example:
+                chargeId: charge-1
+                orderId: order-1
+                amountCents: 1500
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '402':
+          $ref: '#/components/responses/PaymentDeclined'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /payments/charge:
+    post:
+      operationId: chargePaymentProvider
+      summary: Call the configured payment provider
+      parameters:
+        - name: X-Order-Id
+          in: header
+          schema:
+            type: string
+          example: order-1
+      responses:
+        '200':
+          description: Provider response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderStatus'
+              example:
+                status: approved
+        '402':
+          $ref: '#/components/responses/PaymentDeclined'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /payments/charge-status:
+    get:
+      operationId: getChargeStatus
+      summary: Read provider charge status
+      parameters:
+        - name: X-Order-Id
+          in: header
+          schema:
+            type: string
+          example: order-1
+      responses:
+        '200':
+          description: Provider response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderStatus'
+              example:
+                status: approved
+        '402':
+          $ref: '#/components/responses/PaymentDeclined'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /orders:
+    post:
+      operationId: placeOrder
+      security:
+        - buyerBearer: []
+      summary: Reserve a seat and place an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrder'
+            example:
+              eventId: concert-1
+              seatId: A1
+      responses:
+        '201':
+          description: Seat reserved and order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+              example:
+                id: 8c487f71-15a2-4617-a752-0038c7263f20
+                eventId: concert-1
+                seatId: A1
+                createdAt: '2026-10-30T00:00:00Z'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '408':
+          $ref: '#/components/responses/Timeout'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '431':
+          $ref: '#/components/responses/HeadersTooLarge'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/InventoryTimeout'
+components:
+  securitySchemes:
+    buyerBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 buyer access token validated against the configured JWKS.
+  responses:
+    PaymentDeclined:
+      description: Provider definitively declined the payment
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Provider rejected the request or idempotency key was reused with another body
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Buyer does not own the order or ticket, or the browser origin is disallowed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Missing, invalid or expired buyer bearer token
+      headers:
+        WWW-Authenticate:
+          required: true
+          schema:
+            type: string
+          example: Bearer realm="stubline"
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Healthy:
+      description: Process or local dependencies are healthy
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status]
+            properties:
+              status:
+                type: string
+          example:
+            status: ok
+    InventoryTimeout:
+      description: Inventory gRPC deadline exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unavailable:
+      description: Payment provider or inventory is unavailable
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: Invalid JSON or a missing or wrong-typed field
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Bad Request
+            status: 400
+            detail: eventId must be a non-empty string
+            instance: /orders
+            field: eventId
+    Conflict:
+      description: The seat was already reserved
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Conflict
+            status: 409
+            detail: seat unavailable
+            instance: /orders
+            seatId: A1
+    Timeout:
+      description: Request read timed out
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    HeadersTooLarge:
+      description: Request line or headers exceed limits
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooLarge:
+      description: Request body is too large
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Route does not exist
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Not Found
+            status: 404
+            detail: route not found
+            instance: /missing
+  schemas:
+    ProviderStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: approved
+    EventPage:
+      type: object
+      required: [events, next]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        next:
+          type: [string, 'null']
+    Event:
+      type: object
+      additionalProperties: false
+      required: [id, title, startsAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+    SeatPage:
+      type: object
+      required: [seats, next]
+      properties:
+        seats:
+          type: array
+          items:
+            $ref: '#/components/schemas/Seat'
+        next:
+          type: [string, 'null']
+    Seat:
+      type: object
+      additionalProperties: false
+      required: [id, eventId, available]
+      properties:
+        id:
+          type: string
+          example: A1
+        eventId:
+          type: string
+          example: concert-1
+        available:
+          type: boolean
+          example: true
+    PlaceOrder:
+      type: object
+      required: [eventId, seatId]
+      properties:
+        eventId:
+          type: string
+          minLength: 1
+        seatId:
+          type: string
+          minLength: 1
+        buyer:
+          type: string
+          description: Optional buyer identifier for the outbox event.
+        amountMinor:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          example: AUD
+    Order:
+      type: object
+      additionalProperties: false
+      required: [id, eventId, seatId, createdAt]
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        seatId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        field:
+          type: string
+        seatId:
+          type: string
