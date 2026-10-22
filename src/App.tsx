@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, errorMessage, type Event, type Seat } from './api';
+import { api, errorMessage, type Event, type Order, type Seat } from './api';
 import { DevelopmentAuthProvider, type AuthProvider } from './auth';
 import type { RuntimeConfig } from './config';
 
@@ -7,6 +7,9 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
   const auth = useRef<AuthProvider>(authProvider ?? new DevelopmentAuthProvider(config.tokenIssuerUrl));
   const completedCallback = useRef(false);
   const [token, setToken] = useState('');
+  const [orderId, setOrderId] = useState<string | null>(() => new URL(location.href).searchParams.get('order'));
+  const [order, setOrder] = useState<Order | null>(null);
+  const lastOrderLookup = useRef('');
   const [busy, setBusy] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [eventCursor, setEventCursor] = useState<string | null>(null);
@@ -70,7 +73,10 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
     auth.current
       .complete()
       .then((result) => {
-        if (result) setToken(result.token);
+        if (result) {
+          setToken(result.token);
+          setOrderId(new URL(result.returnPath, location.origin).searchParams.get('order'));
+        }
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : 'Sign in failed.'));
   }, []);
@@ -86,9 +92,55 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
       setBusy(false);
     }
   }
+  useEffect(() => {
+    if (!token || !orderId || lastOrderLookup.current === `${token}:${orderId}`) return;
+    lastOrderLookup.current = `${token}:${orderId}`;
+    let active = true;
+    api(config.apiBaseUrl, token)
+      .GET('/orders/{orderId}', { params: { path: { orderId } } })
+      .then(({ data, error, response }) => {
+        if (!active) return;
+        if (error) setMessage(errorMessage(error, response.status));
+        else {
+          setOrder(data);
+          setEventId(data.eventId);
+        }
+      })
+      .catch(() => {
+        if (active) setMessage('Could not reopen the order.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [config.apiBaseUrl, token, orderId]);
   function selectEvent(id: string) {
     setEventId(id);
     setSeatCursor(null);
+    setOrderId(null);
+    setOrder(null);
+    history.replaceState({}, '', '/');
+  }
+  async function reserve(seatId: string) {
+    if (!token) {
+      setMessage('Sign in before reserving a seat.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const { data, error, response } = await api(config.apiBaseUrl, token).POST('/orders', {
+        body: { eventId, seatId },
+      });
+      if (error) throw new Error(errorMessage(error, response.status));
+      lastOrderLookup.current = `${token}:${data.id}`;
+      setOrder(data);
+      setOrderId(data.id);
+      history.replaceState({}, '', `/?order=${encodeURIComponent(data.id)}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Reservation failed.');
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <main>
@@ -111,7 +163,12 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
         <ul>
           {seats.map((seat) => (
             <li key={seat.id}>
-              {seat.id} — {seat.available ? 'Available' : 'Unavailable'}
+              {seat.id} — {seat.available ? 'Available' : 'Unavailable'}{' '}
+              {seat.available && (
+                <button disabled={busy || !token} onClick={() => reserve(seat.id)}>
+                  Reserve {seat.id}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -128,6 +185,16 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
           <p>Signed in</p>
         )}
       </section>
+      {orderId && !token && <p>Sign in to reopen order {orderId}.</p>}
+      {order && (
+        <section aria-labelledby="order-heading">
+          <h2 id="order-heading">Your order</h2>
+          <p>
+            Order {order.id}: {order.eventId}, seat {order.seatId}
+          </p>
+          <p>Created {new Date(order.createdAt).toLocaleString()}</p>
+        </section>
+      )}
       {message && <p role="alert">{message}</p>}
     </main>
   );
