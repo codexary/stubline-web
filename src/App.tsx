@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, errorMessage, type Event, type Seat } from './api';
+import { DevelopmentAuthProvider, type AuthProvider } from './auth';
 import type { RuntimeConfig } from './config';
 
-export function App({ config }: { config: RuntimeConfig }) {
+export function App({ config, authProvider }: { config: RuntimeConfig; authProvider?: AuthProvider }) {
+  const auth = useRef<AuthProvider>(authProvider ?? new DevelopmentAuthProvider(config.tokenIssuerUrl));
+  const completedCallback = useRef(false);
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [eventCursor, setEventCursor] = useState<string | null>(null);
   const [nextEvent, setNextEvent] = useState<string | null>(null);
@@ -59,6 +64,28 @@ export function App({ config }: { config: RuntimeConfig }) {
     };
   }, [config.apiBaseUrl, eventId, seatCursor]);
 
+  useEffect(() => {
+    if (completedCallback.current) return;
+    completedCallback.current = true;
+    auth.current
+      .complete()
+      .then((result) => {
+        if (result) setToken(result.token);
+      })
+      .catch((error) => setMessage(error instanceof Error ? error.message : 'Sign in failed.'));
+  }, []);
+  async function signIn() {
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = await auth.current.begin();
+      if (result) setToken(result);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Sign in failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
   function selectEvent(id: string) {
     setEventId(id);
     setSeatCursor(null);
@@ -90,6 +117,16 @@ export function App({ config }: { config: RuntimeConfig }) {
         </ul>
         {seatCursor && <button onClick={() => setSeatCursor(null)}>First seats page</button>}
         {nextSeat && <button onClick={() => setSeatCursor(nextSeat)}>Next seats page</button>}
+      </section>
+      <section aria-labelledby="signin-heading">
+        <h2 id="signin-heading">Sign in</h2>
+        {!token ? (
+          <button disabled={busy} onClick={signIn}>
+            Sign in
+          </button>
+        ) : (
+          <p>Signed in</p>
+        )}
       </section>
       {message && <p role="alert">{message}</p>}
     </main>
