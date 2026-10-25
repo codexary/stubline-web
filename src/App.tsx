@@ -2,15 +2,36 @@ import { useEffect, useRef, useState } from 'react';
 import { api, errorMessage, type Event, type Order, type Seat } from './api';
 import { DevelopmentAuthProvider, type AuthProvider } from './auth';
 import type { RuntimeConfig } from './config';
+import { createPaymentAttempt, pay, type PaymentAttempt } from './payment';
+
+function savedAttempt(orderId: string): PaymentAttempt | null {
+  try {
+    const raw = sessionStorage.getItem(`stubline.payment.${orderId}`);
+    if (!raw) return null;
+    const value: unknown = JSON.parse(raw);
+    if (
+      value &&
+      typeof value === 'object' &&
+      'orderId' in value &&
+      value.orderId === orderId &&
+      'amountCents' in value &&
+      typeof value.amountCents === 'number' &&
+      'key' in value &&
+      typeof value.key === 'string'
+    )
+      return value as PaymentAttempt;
+  } catch {
+    /* Ignore unavailable or malformed session storage. */
+  }
+  return null;
+}
 
 export function App({ config, authProvider }: { config: RuntimeConfig; authProvider?: AuthProvider }) {
   const auth = useRef<AuthProvider>(authProvider ?? new DevelopmentAuthProvider(config.tokenIssuerUrl));
   const completedCallback = useRef(false);
-  const [token, setToken] = useState('');
-  const [orderId, setOrderId] = useState<string | null>(() => new URL(location.href).searchParams.get('order'));
-  const [order, setOrder] = useState<Order | null>(null);
+  const paymentInFlight = useRef(false);
   const lastOrderLookup = useRef('');
-  const [busy, setBusy] = useState(false);
+  const attemptRef = useRef<PaymentAttempt | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [eventCursor, setEventCursor] = useState<string | null>(null);
   const [nextEvent, setNextEvent] = useState<string | null>(null);
@@ -18,7 +39,29 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
   const [seats, setSeats] = useState<Seat[]>([]);
   const [seatCursor, setSeatCursor] = useState<string | null>(null);
   const [nextSeat, setNextSeat] = useState<string | null>(null);
+  const [token, setToken] = useState('');
+  const [orderId, setOrderId] = useState<string | null>(() => new URL(location.href).searchParams.get('order'));
+  const [order, setOrder] = useState<Order | null>(null);
+  const [attempt, setAttempt] = useState<PaymentAttempt | null>(null);
+  const [canPay, setCanPay] = useState(false);
+  const [amount, setAmount] = useState('25.00');
+  const [paid, setPaid] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (completedCallback.current) return;
+    completedCallback.current = true;
+    auth.current
+      .complete()
+      .then((result) => {
+        if (result) {
+          setToken(result.token);
+          setOrderId(new URL(result.returnPath, location.origin).searchParams.get('order'));
+        }
+      })
+      .catch((error) => setMessage(error instanceof Error ? error.message : 'Sign in failed.'));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -68,18 +111,32 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
   }, [config.apiBaseUrl, eventId, seatCursor]);
 
   useEffect(() => {
-    if (completedCallback.current) return;
-    completedCallback.current = true;
-    auth.current
-      .complete()
-      .then((result) => {
-        if (result) {
-          setToken(result.token);
-          setOrderId(new URL(result.returnPath, location.origin).searchParams.get('order'));
+    if (!token || !orderId || lastOrderLookup.current === `${token}:${orderId}`) return;
+    lastOrderLookup.current = `${token}:${orderId}`;
+    let active = true;
+    api(config.apiBaseUrl, token)
+      .GET('/orders/{orderId}', { params: { path: { orderId } } })
+      .then(({ data, error, response }) => {
+        if (!active) return;
+        if (error) setMessage(errorMessage(error, response.status));
+        else {
+          setOrder(data);
+          setEventId(data.eventId);
+          const prior = savedAttempt(data.id);
+          attemptRef.current = prior;
+          setAttempt(prior);
+          setCanPay(!!prior);
+          if (prior) setAmount((prior.amountCents / 100).toFixed(2));
         }
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : 'Sign in failed.'));
-  }, []);
+      .catch(() => {
+        if (active) setMessage('Could not reopen the order.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [config.apiBaseUrl, token, orderId]);
+
   async function signIn() {
     setBusy(true);
     setMessage('');
@@ -92,32 +149,15 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
       setBusy(false);
     }
   }
-  useEffect(() => {
-    if (!token || !orderId || lastOrderLookup.current === `${token}:${orderId}`) return;
-    lastOrderLookup.current = `${token}:${orderId}`;
-    let active = true;
-    api(config.apiBaseUrl, token)
-      .GET('/orders/{orderId}', { params: { path: { orderId } } })
-      .then(({ data, error, response }) => {
-        if (!active) return;
-        if (error) setMessage(errorMessage(error, response.status));
-        else {
-          setOrder(data);
-          setEventId(data.eventId);
-        }
-      })
-      .catch(() => {
-        if (active) setMessage('Could not reopen the order.');
-      });
-    return () => {
-      active = false;
-    };
-  }, [config.apiBaseUrl, token, orderId]);
   function selectEvent(id: string) {
     setEventId(id);
     setSeatCursor(null);
     setOrderId(null);
     setOrder(null);
+    attemptRef.current = null;
+    setAttempt(null);
+    setCanPay(false);
+    setPaid(false);
     history.replaceState({}, '', '/');
   }
   async function reserve(seatId: string) {
@@ -135,6 +175,10 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
       lastOrderLookup.current = `${token}:${data.id}`;
       setOrder(data);
       setOrderId(data.id);
+      setCanPay(true);
+      attemptRef.current = null;
+      setAttempt(null);
+      setPaid(false);
       history.replaceState({}, '', `/?order=${encodeURIComponent(data.id)}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Reservation failed.');
@@ -142,6 +186,26 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
       setBusy(false);
     }
   }
+  async function submitPayment() {
+    if (!order || !token || !canPay || busy || paymentInFlight.current) return;
+    paymentInFlight.current = true;
+    const current = attemptRef.current ?? createPaymentAttempt(order.id, Math.round(Number(amount) * 100));
+    attemptRef.current = current;
+    setAttempt(current);
+    sessionStorage.setItem(`stubline.payment.${order.id}`, JSON.stringify(current));
+    setBusy(true);
+    setMessage('');
+    try {
+      await pay(config.apiBaseUrl, token, current);
+      setPaid(true);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Payment failed.');
+    } finally {
+      paymentInFlight.current = false;
+      setBusy(false);
+    }
+  }
+
   return (
     <main>
       <h1>Stubline tickets</h1>
@@ -193,6 +257,26 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
             Order {order.id}: {order.eventId}, seat {order.seatId}
           </p>
           <p>Created {new Date(order.createdAt).toLocaleString()}</p>
+          <label htmlFor="amount">Demo payment amount (AUD)</label>{' '}
+          <input
+            id="amount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={amount}
+            disabled={!!attempt || !canPay}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+          {canPay ? (
+            <button
+              disabled={busy || paid || !Number.isFinite(Number(amount)) || Number(amount) <= 0}
+              onClick={submitPayment}
+            >
+              {attempt ? 'Retry payment' : 'Pay'}
+            </button>
+          ) : (
+            <p>Payment status cannot be recovered for this order. Use the original session to retry a payment.</p>
+          )}
         </section>
       )}
       {message && <p role="alert">{message}</p>}
