@@ -1,3 +1,46 @@
 :root {
   font-family: system-ui, sans-serif;
+  color: #17212b;
+  background: #f8fafc;
+  line-height: 1.5;
+}
+main {
+  max-width: 48rem;
+  margin: auto;
+  padding: 1rem;
+}
+section {
+  padding: 1rem;
+  margin: 1rem 0;
+  border: 1px solid #a9b5c2;
+  border-radius: 0.5rem;
+  background: white;
+}
+input,
+button {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  margin: 0.25rem;
+}
+button {
+  color: white;
+  background: #174a78;
+  border: 0;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+button:disabled {
+  background: #687786;
+  cursor: not-allowed;
+}
+:focus-visible {
+  outline: 3px solid #a84c00;
+  outline-offset: 3px;
+}
+li {
+  padding: 0.25rem;
+}
+[role='alert'] {
+  color: #8e1f13;
+  font-weight: 600;
 }
