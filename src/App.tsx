@@ -46,6 +46,7 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
   const [canPay, setCanPay] = useState(false);
   const [amount, setAmount] = useState('25.00');
   const [paid, setPaid] = useState(false);
+  const [ticketUrl, setTicketUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -158,6 +159,7 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
     setAttempt(null);
     setCanPay(false);
     setPaid(false);
+    setTicketUrl('');
     history.replaceState({}, '', '/');
   }
   async function reserve(seatId: string) {
@@ -179,6 +181,7 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
       attemptRef.current = null;
       setAttempt(null);
       setPaid(false);
+      setTicketUrl('');
       history.replaceState({}, '', `/?order=${encodeURIComponent(data.id)}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Reservation failed.');
@@ -202,6 +205,22 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
       setMessage(error instanceof Error ? error.message : 'Payment failed.');
     } finally {
       paymentInFlight.current = false;
+      setBusy(false);
+    }
+  }
+  async function getTicket() {
+    if (!order || !token) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const { data, error, response } = await api(config.apiBaseUrl, token).GET('/orders/{orderId}/ticket', {
+        params: { path: { orderId: order.id } },
+      });
+      if (error) throw new Error(errorMessage(error, response.status));
+      setTicketUrl(data.url);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Ticket is unavailable.');
+    } finally {
       setBusy(false);
     }
   }
@@ -276,6 +295,16 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
             </button>
           ) : (
             <p>Payment status cannot be recovered for this order. Use the original session to retry a payment.</p>
+          )}
+          <button disabled={busy} onClick={getTicket}>
+            Get ticket
+          </button>
+          {ticketUrl && (
+            <p>
+              <a href={ticketUrl} download="ticket.pdf">
+                Download ticket PDF
+              </a>
+            </p>
           )}
         </section>
       )}
