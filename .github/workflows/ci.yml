@@ -1,0 +1,71 @@
+name: CI
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm check:api
+      - run: pnpm dlx @cyclonedx/cdxgen@12.9.0 -t nodejs -o bom.json
+      - run: docker build --build-arg VERSION=1.0.0 --build-arg REVISION=${{ github.sha }} -t stubline-web:ci .
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: stubline-web:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+  e2e:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: stubline-web
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: codexary/stubline-backend
+          ref: v1.1.0
+          path: stubline-backend
+      - uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: stubline-web/.nvmrc
+          cache: pnpm
+          cache-dependency-path: stubline-web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: stubline-web
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: stubline-web
+      - run: cp .env.example .env && ./scripts/dev-ca.sh && STUBLINE_OAUTH_CLIENT_ID=stubline-web STUBLINE_OAUTH_REDIRECT_URIS=http://localhost:8088/callback STUBLINE_OAUTH_WEB_ORIGINS=http://localhost:8088 STUBLINE_CORS_ORIGINS=http://localhost:8088 docker compose -p stubline up --build -d --wait
+        working-directory: stubline-backend
+      - run: docker compose -p stubline-web up --build -d --wait
+        working-directory: stubline-web
+      - run: pnpm test:e2e
+        working-directory: stubline-web
+      - if: always()
+        run: docker compose -p stubline-web down && docker compose -f stubline-backend/compose.yaml -p stubline down

@@ -1,0 +1,21 @@
+pid /tmp/nginx.pid;
+events { worker_connections 1024; }
+http {
+  access_log /dev/stdout;
+  error_log /dev/stderr warn;
+  client_body_temp_path /tmp/client_temp;
+  proxy_temp_path /tmp/proxy_temp;
+  include /etc/nginx/mime.types;
+  server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ${STUBLINE_API_ORIGIN} ${STUBLINE_TOKEN_ISSUER_ORIGIN}; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    location = /health { default_type text/plain; return 200 'ok'; }
+    location = /config.json { expires -1; alias /tmp/config.json; }
+    location / { try_files $uri $uri/ /index.html; }
+  }
+}

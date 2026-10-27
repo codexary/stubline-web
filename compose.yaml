@@ -1,0 +1,11 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        VERSION: 1.0.0
+        REVISION: ${REVISION:-local}
+    ports: ['127.0.0.1:8088:8080']
+    environment:
+      STUBLINE_API_ORIGIN: https://localhost:8080
+      STUBLINE_TOKEN_ISSUER_ORIGIN: https://localhost:8443
