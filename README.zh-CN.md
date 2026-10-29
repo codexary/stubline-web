@@ -6,6 +6,10 @@
 
 `openapi/stubline.yaml` 逐字节复制自后端 release `v1.1.0`。更新契约后运行 `pnpm generate:api`，用 `pnpm check:api` 检查已提交的生成客户端。
 
+## 试用浏览器演示
+
+运行 `VITE_DEMO=1 pnpm dev` 并打开 Vite 地址。横幅标明使用模拟数据。无需启动后端，即可浏览活动与座位、以演示买家身份登录、预订、支付并下载示例门票。演示登录只签发本地占位 token；普通构建继续使用 PKCE 和开发 issuer。运行 `VITE_DEMO=1 pnpm build` 可构建独立演示网站。
+
 ## 对接后端
 
 使用 Node 26.12.1 和 pnpm 10.20.0。在相邻的 `stubline-backend` 仓库切换到 tag `v1.1.0` 后运行：

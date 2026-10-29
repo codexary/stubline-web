@@ -12,7 +12,7 @@ async function reserve() {
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
   await screen.findByText('Signed in');
   fireEvent.click(screen.getByRole('button', { name: 'Reserve A1' }));
-  await screen.findByText(/Order order-1/);
+  await screen.findByText(/Order order-2/);
 }
 describe('buyer flow', () => {
   it('shows events and a useful payment error', async () => {

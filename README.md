@@ -6,6 +6,10 @@ A small React buyer site for Stubline API **1.1.0** (backend release `v1.1.0`). 
 
 `openapi/stubline.yaml` is copied byte for byte from backend release `v1.1.0`. Run `pnpm generate:api` after a contract update and `pnpm check:api` to check the committed generated client.
 
+## Try the browser demo
+
+Run `VITE_DEMO=1 pnpm dev` and open the Vite URL. The banner marks simulated data. You can browse events and seats, sign in as a demo buyer, reserve, pay and download a sample ticket without starting the backend. Demo sign-in issues only a local placeholder token; regular builds use PKCE and the development issuer. Build the standalone demo with `VITE_DEMO=1 pnpm build`.
+
 ## Run against the backend
 
 Use Node 26.12.1 and pnpm 10.20.0. Start from a sibling `stubline-backend` checkout at tag `v1.1.0`:

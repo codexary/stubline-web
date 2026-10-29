@@ -26,7 +26,15 @@ function savedAttempt(orderId: string): PaymentAttempt | null {
   return null;
 }
 
-export function App({ config, authProvider }: { config: RuntimeConfig; authProvider?: AuthProvider }) {
+export function App({
+  config,
+  authProvider,
+  demo = false,
+}: {
+  config: RuntimeConfig;
+  authProvider?: AuthProvider;
+  demo?: boolean;
+}) {
   const auth = useRef<AuthProvider>(authProvider ?? new DevelopmentAuthProvider(config.tokenIssuerUrl));
   const completedCallback = useRef(false);
   const paymentInFlight = useRef(false);
@@ -160,7 +168,7 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
     setCanPay(false);
     setPaid(false);
     setTicketUrl('');
-    history.replaceState({}, '', '/');
+    history.replaceState({}, '', import.meta.env.BASE_URL);
   }
   async function reserve(seatId: string) {
     if (!token) {
@@ -182,7 +190,7 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
       setAttempt(null);
       setPaid(false);
       setTicketUrl('');
-      history.replaceState({}, '', `/?order=${encodeURIComponent(data.id)}`);
+      history.replaceState({}, '', `${import.meta.env.BASE_URL}?order=${encodeURIComponent(data.id)}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Reservation failed.');
     } finally {
@@ -227,6 +235,7 @@ export function App({ config, authProvider }: { config: RuntimeConfig; authProvi
 
   return (
     <main>
+      {demo && <p className="demo-banner">Demo data — no real backend</p>}
       <h1>Stubline tickets</h1>
       <section aria-labelledby="events-heading">
         <h2 id="events-heading">Events</h2>

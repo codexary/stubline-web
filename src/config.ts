@@ -3,6 +3,8 @@ export interface RuntimeConfig {
   tokenIssuerUrl: string;
 }
 export async function loadConfig(): Promise<RuntimeConfig> {
+  if (import.meta.env.VITE_DEMO === '1')
+    return { apiBaseUrl: 'https://api.test', tokenIssuerUrl: 'https://issuer.test' };
   const response = await fetch('/config.json', { cache: 'no-store' });
   if (!response.ok) throw new Error('Could not load site configuration.');
   const value: unknown = await response.json();
