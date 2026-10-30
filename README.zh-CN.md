@@ -8,6 +8,8 @@
 
 ## 试用浏览器演示
 
+在线演示包含在 `v1.1.0` 版本中。
+
 打开[在线演示](https://codexary.github.io/stubline-web/)，或运行 `VITE_DEMO=1 pnpm dev` 并打开 Vite 地址。横幅标明使用模拟数据。无需启动后端，即可浏览活动与座位、以演示买家身份登录、预订、支付并下载示例门票。演示登录只签发本地占位 token；普通构建继续使用 PKCE 和开发 issuer。运行 `VITE_DEMO=1 VITE_BASE_PATH=/stubline-web/ pnpm build` 可构建独立演示网站。Pages 工作流仅在推送 `v*` tag 或手动触发时发布。
 
 ## 对接后端

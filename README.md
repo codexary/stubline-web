@@ -8,6 +8,8 @@ A small React buyer site for Stubline API **1.1.0** (backend release `v1.1.0`). 
 
 ## Try the browser demo
 
+The hosted demo is included in release `v1.1.0`.
+
 Open the [hosted demo](https://codexary.github.io/stubline-web/) or run `VITE_DEMO=1 pnpm dev` and open the Vite URL. The banner marks simulated data. You can browse events and seats, sign in as a demo buyer, reserve, pay and download a sample ticket without starting the backend. Demo sign-in issues only a local placeholder token; regular builds use PKCE and the development issuer. Build the standalone demo with `VITE_DEMO=1 VITE_BASE_PATH=/stubline-web/ pnpm build`. The Pages workflow publishes only for a `v*` tag push or a manual dispatch.
 
 ## Run against the backend

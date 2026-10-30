@@ -28,7 +28,7 @@ jobs:
       - run: pnpm build
       - run: pnpm check:api
       - run: pnpm dlx @cyclonedx/cdxgen@12.9.0 -t nodejs -o bom.json
-      - run: docker build --build-arg VERSION=1.0.0 --build-arg REVISION=${{ github.sha }} -t stubline-web:ci .
+      - run: docker build --build-arg VERSION=1.1.0 --build-arg REVISION=${{ github.sha }} -t stubline-web:ci .
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
