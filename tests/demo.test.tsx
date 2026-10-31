@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { loadConfig } from '../src/config';
@@ -18,6 +18,17 @@ describe('demo switch', () => {
     render(<App config={config} authProvider={new DemoAuthProvider()} demo />);
     expect(screen.getByText('Demo data — no real backend')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'See seats for Concert One' })).toBeEnabled();
+  });
+
+  it('shows a reserved demo seat as unavailable', async () => {
+    vi.stubEnv('VITE_DEMO', '1');
+    render(<App config={await loadConfig()} authProvider={new DemoAuthProvider()} demo />);
+    expect(await screen.findByText(/A1 — Available/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await screen.findByText('Signed in');
+    fireEvent.click(screen.getByRole('button', { name: 'Reserve A1' }));
+    await screen.findByText(/Order order-2/);
+    expect(screen.getByText(/A1 — Unavailable/)).toBeInTheDocument();
   });
 
   it('loads configuration and hides the banner in a normal build', async () => {

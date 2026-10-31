@@ -32,6 +32,8 @@ describe('buyer flow', () => {
     );
     render(<App config={config} authProvider={auth} />);
     await reserve();
+    expect(screen.getByText(/A1 — Unavailable/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reserve A1' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Pay' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('card declined');
     expect(screen.getByRole('button', { name: 'Retry payment' })).toBeEnabled();

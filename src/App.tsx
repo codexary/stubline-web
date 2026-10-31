@@ -185,6 +185,7 @@ export function App({
       lastOrderLookup.current = `${token}:${data.id}`;
       setOrder(data);
       setOrderId(data.id);
+      setSeats((current) => current.map((seat) => (seat.id === seatId ? { ...seat, available: false } : seat)));
       setCanPay(true);
       attemptRef.current = null;
       setAttempt(null);
