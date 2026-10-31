@@ -9,7 +9,7 @@ RUN pnpm build
 FROM nginxinc/nginx-unprivileged:1.29.3-alpine@sha256:5aea7cc516b419e3526f47dd1531be31a56a046cfe44754d94f9383e13e2ee99
 USER root
 RUN apk upgrade --no-cache
-ARG VERSION=1.0.0
+ARG VERSION
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="Stubline buyer site" \
       org.opencontainers.image.version="${VERSION}" \

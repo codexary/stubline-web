@@ -35,7 +35,7 @@ pnpm install --frozen-lockfile
 pnpm dev --port 8088
 ```
 
-若使用容器而非 Vite，在本仓库运行 `docker compose -p stubline-web up --build -d --wait`。打开 `http://localhost:8088`；`curl -fsS http://localhost:8088/health` 返回 `ok`。镜像启动时根据 `STUBLINE_API_ORIGIN` 和 `STUBLINE_TOKEN_ISSUER_ORIGIN` 生成 `config.json`。CSP 仅允许这两个 HTTPS 来源。浏览器直接通过 HTTPS 访问开发令牌服务，后者按配置允许 CORS。
+若使用容器而非 Vite，在本仓库先运行 `./scripts/build-image.sh`，再运行 `docker compose -p stubline-web up -d --no-build --wait`。打开 `http://localhost:8088`；`curl -fsS http://localhost:8088/health` 返回 `ok`。镜像启动时根据 `STUBLINE_API_ORIGIN` 和 `STUBLINE_TOKEN_ISSUER_ORIGIN` 生成 `config.json`。CSP 仅允许这两个 HTTPS 来源。浏览器直接通过 HTTPS 访问开发令牌服务，后者按配置允许 CORS。
 
 ## 身份验证与支付
 

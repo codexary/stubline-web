@@ -35,7 +35,7 @@ pnpm install --frozen-lockfile
 pnpm dev --port 8088
 ```
 
-For the container instead of Vite, run `docker compose -p stubline-web up --build -d --wait` from this repository. Open `http://localhost:8088`; `curl -fsS http://localhost:8088/health` returns `ok`. The image generates `config.json` at startup from `STUBLINE_API_ORIGIN` and `STUBLINE_TOKEN_ISSUER_ORIGIN`. CSP allows those HTTPS origins only. The development token issuer is accessed directly by the browser over HTTPS with its configured CORS origin.
+For the container instead of Vite, run `./scripts/build-image.sh` then `docker compose -p stubline-web up -d --no-build --wait` from this repository. Open `http://localhost:8088`; `curl -fsS http://localhost:8088/health` returns `ok`. The image generates `config.json` at startup from `STUBLINE_API_ORIGIN` and `STUBLINE_TOKEN_ISSUER_ORIGIN`. CSP allows those HTTPS origins only. The development token issuer is accessed directly by the browser over HTTPS with its configured CORS origin.
 
 ## Authentication and payment
 
